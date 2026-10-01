@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flowly</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <svg viewBox="0 0 64 64" width="22" height="22" aria-hidden="true"><rect x="20" y="4" width="13" height="56" rx="6.5" fill="currentColor"/><rect x="20" y="4" width="40" height="13" rx="6.5" fill="currentColor" fill-opacity=".42"/><rect x="20" y="21" width="32" height="13" rx="6.5" fill="currentColor" fill-opacity=".58"/><rect x="20" y="38" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".74"/><rect x="4" y="21" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".86"/><rect x="4" y="38" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".94"/></svg>
+    <strong>Flowly</strong>
+    <span class="spacer"></span>
+    <button id="open" class="ghost" type="button" title="Open Flowly in the browser">↗</button>
+  </header>
+
+  <section id="signed-out" hidden>
+    <h1>Track time from your tray</h1>
+    <p class="muted">Sign in with your Flowly account. Your browser opens to confirm.</p>
+    <button id="signin" class="primary" type="button">Sign in</button>
+    <p id="signin-wait" class="muted small" hidden>Waiting for the browser… finish signing in there.</p>
+  </section>
+
+  <section id="signed-in" hidden>
+    <div id="timer" class="timer idle">
+      <div>
+        <div id="elapsed" class="elapsed">0:00</div>
+        <div id="what" class="muted small">No timer running</div>
+      </div>
+      <button id="stop" class="danger" type="button" hidden>Stop</button>
+    </div>
+
+    <form id="quick">
+      <input id="desc" placeholder="What are you working on?" aria-label="What are you working on?">
+      <select id="ws" aria-label="Workspace"></select>
+      <button class="primary" type="submit">Start</button>
+    </form>
+
+    <h2>Today</h2>
+    <ul id="tasks"></ul>
+    <p id="empty" class="muted small" hidden>Nothing planned for today.</p>
+
+    <footer>
+      <span id="email" class="muted small"></span>
+      <button id="signout" class="ghost small" type="button">Sign out</button>
+    </footer>
+  </section>
+
+  <p id="error" class="error" hidden></p>
+  <script src="main.js"></script>
+</body>
+</html>
