@@ -26,11 +26,67 @@ async function call(cmd, args) {
   }
 }
 
+let composing = null; // 'add' | 'bulk' | null
+
+function fillWorkspaces(select) {
+  const current = select.value;
+  select.innerHTML = '';
+  for (const w of state.all_workspaces || []) {
+    const o = document.createElement('option');
+    o.value = w.id;
+    o.textContent = w.name;
+    select.appendChild(o);
+  }
+  const personal = (state.all_workspaces || []).find((w) => w.name.toLowerCase() === 'personal');
+  select.value = current || (personal ? personal.id : select.value);
+  select.hidden = (state.all_workspaces || []).length < 2;
+}
+
+/** Tasks a list will create: non-empty lines that aren't indented under another one. */
+function countTasks(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (!lines.length) return 0;
+  const base = Math.min(...lines.map((l) => l.length - l.trimStart().length));
+  return lines.filter((l) => l.length - l.trimStart().length === base).length;
+}
+
+function setComposing(mode) {
+  composing = state && state.signed_in ? mode : null;
+  $('compose-add').hidden = composing !== 'add';
+  $('compose-bulk').hidden = composing !== 'bulk';
+  $('btn-add').classList.toggle('on', composing === 'add');
+  $('btn-bulk').classList.toggle('on', composing === 'bulk');
+  if (composing === 'add') setTimeout(() => $('add-text').focus(), 30);
+  if (composing === 'bulk') setTimeout(() => $('bulk-text').focus(), 30);
+}
+
+function flash(message) {
+  const el = $('added');
+  el.textContent = message;
+  el.hidden = false;
+  clearTimeout(flash.t);
+  flash.t = setTimeout(() => (el.hidden = true), 3500);
+}
+
+async function addTasks(text, ws, day) {
+  const res = await call('add_tasks', { text, workspace: Number(ws) || null, day });
+  const n = res.created.length;
+  flash(n === 1 ? `Added “${res.created[0].title}” to ${res.workspace.name}` : `Added ${n} tasks to ${res.workspace.name}`);
+  return res;
+}
+
 function render() {
   if (!state) return;
   $('signed-out').hidden = state.signed_in;
   $('signed-in').hidden = !state.signed_in;
-  if (!state.signed_in) return;
+  $('btn-add').hidden = $('btn-bulk').hidden = !state.signed_in;
+  if (!state.signed_in) {
+    setComposing(null);
+    return;
+  }
+  fillWorkspaces($('add-ws'));
+  fillWorkspaces($('bulk-ws'));
+  $('add-shortcut').textContent = state.shortcut || '';
   $('email').textContent = state.email || '';
 
   const t = state.timer;
@@ -108,6 +164,39 @@ $('quick').onsubmit = async (e) => {
   $('desc').value = '';
 };
 
+$('btn-add').onclick = () => setComposing(composing === 'add' ? null : 'add');
+$('btn-bulk').onclick = () => setComposing(composing === 'bulk' ? null : 'bulk');
+document.querySelectorAll('[data-close]').forEach((b) => (b.onclick = () => setComposing(null)));
+$('add-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $('add-text').value.trim();
+  if (!text) return;
+  await addTasks(text, $('add-ws').value, $('add-day').value);
+  $('add-text').value = '';
+  $('add-text').focus();
+};
+$('bulk-text').oninput = () => {
+  const n = countTasks($('bulk-text').value);
+  $('bulk-submit').disabled = n === 0;
+  $('bulk-submit').textContent = n === 0 ? 'Add' : n === 1 ? 'Add 1 task' : `Add ${n} tasks`;
+};
+$('bulk-text').onkeydown = (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('bulk-form').requestSubmit();
+};
+$('bulk-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $('bulk-text').value;
+  if (!countTasks(text)) return;
+  await addTasks(text, $('bulk-ws').value, $('bulk-day').value);
+  $('bulk-text').value = '';
+  $('bulk-text').oninput();
+  setComposing(null);
+};
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && composing) setComposing(null);
+});
+
+listen('flowly://compose', (e) => setComposing(String(e.payload)));
 listen('flowly://state', load);
 listen('flowly://error', (e) => showError(String(e.payload)));
 window.addEventListener('focus', () => invoke('reload'));

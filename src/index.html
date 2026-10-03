@@ -11,6 +11,8 @@
     <svg viewBox="0 0 64 64" width="22" height="22" aria-hidden="true"><rect x="20" y="4" width="13" height="56" rx="6.5" fill="currentColor"/><rect x="20" y="4" width="40" height="13" rx="6.5" fill="currentColor" fill-opacity=".42"/><rect x="20" y="21" width="32" height="13" rx="6.5" fill="currentColor" fill-opacity=".58"/><rect x="20" y="38" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".74"/><rect x="4" y="21" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".86"/><rect x="4" y="38" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".94"/></svg>
     <strong>Flowly</strong>
     <span class="spacer"></span>
+    <button id="btn-add" class="ghost small" type="button" hidden>+ Task</button>
+    <button id="btn-bulk" class="ghost small" type="button" title="Paste a list of tasks" hidden>≡ Bulk</button>
     <button id="open" class="ghost" type="button" title="Open Flowly in the browser">↗</button>
   </header>
 
@@ -20,6 +22,47 @@
     <button id="signin" class="primary" type="button">Sign in</button>
     <p id="signin-wait" class="muted small" hidden>Waiting for the browser… finish signing in there.</p>
   </section>
+
+  <section id="compose-add" class="compose" hidden>
+    <form id="add-form">
+      <input id="add-text" placeholder="New task… e.g. Call Marta !high @tomorrow" aria-label="New task" autocomplete="off">
+      <div class="row">
+        <select id="add-ws" aria-label="Workspace"></select>
+        <select id="add-day" aria-label="When">
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
+          <option value="backlog">Backlog</option>
+        </select>
+        <span class="spacer"></span>
+        <button type="button" class="ghost small" data-close>Cancel</button>
+        <button class="primary" type="submit">Add</button>
+      </div>
+      <p class="muted small hint"><span id="add-shortcut"></span> opens this from anywhere · Enter adds · Esc closes</p>
+    </form>
+  </section>
+
+  <section id="compose-bulk" class="compose" hidden>
+    <form id="bulk-form">
+      <textarea id="bulk-text" rows="8" aria-label="Tasks, one per line" placeholder="- Call the accountant !high
+- Draft the newsletter +Website #writing
+  include the October numbers
+- [x] Book the venue @friday"></textarea>
+      <div class="row">
+        <select id="bulk-ws" aria-label="Workspace"></select>
+        <select id="bulk-day" aria-label="When">
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
+          <option value="backlog">Backlog</option>
+        </select>
+        <span class="spacer"></span>
+        <button type="button" class="ghost small" data-close>Cancel</button>
+        <button id="bulk-submit" class="primary" type="submit" disabled>Add</button>
+      </div>
+      <p class="muted small hint">One task per line · indented lines become notes · <code>!high</code> <code>#tag</code> <code>+Project</code> <code>@tomorrow</code> <code>[x]</code> · Ctrl/⌘+Enter adds</p>
+    </form>
+  </section>
+
+  <p id="added" class="added" hidden></p>
 
   <section id="signed-in" hidden>
     <div id="timer" class="timer idle">

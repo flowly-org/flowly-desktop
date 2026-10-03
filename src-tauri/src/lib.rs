@@ -15,8 +15,17 @@ use tauri_plugin_opener::OpenerExt;
 struct Snapshot {
     timer: Option<Value>,
     tasks: Vec<Value>,
+    /// Workspaces with time tracking (for the timer).
     workspaces: Vec<Value>,
+    /// Every workspace (for adding tasks).
+    all_workspaces: Vec<Value>,
 }
+
+/// Global shortcut for quick add: ⌘⌥N on macOS, Ctrl+Alt+N elsewhere.
+#[cfg(target_os = "macos")]
+const QUICK_ADD_KEYS: &str = "⌘⌥N";
+#[cfg(not(target_os = "macos"))]
+const QUICK_ADD_KEYS: &str = "Ctrl+Alt+N";
 
 struct AppState {
     client: Arc<Client>,
@@ -86,6 +95,7 @@ async fn refresh(app: &AppHandle) {
                 .filter(|w| w["time_tracking"].as_bool().unwrap_or(true))
                 .map(|w| json!({"id": w["id"], "name": w["name"], "color": w["color"]}))
                 .collect();
+            snap.all_workspaces = ws.iter().map(|w| json!({"id": w["id"], "name": w["name"], "color": w["color"]})).collect();
         }
     }
     rebuild_tray(app);
@@ -115,6 +125,9 @@ fn rebuild_tray(app: &AppHandle) {
                 tasks.append(&MenuItem::with_id(app, id, t["title"].as_str().unwrap_or("Task"), true, None::<&str>)?)?;
             }
             menu.append(&tasks)?;
+            menu.append(&PredefinedMenuItem::separator(app)?)?;
+            menu.append(&MenuItem::with_id(app, "add", format!("Add task…  ({QUICK_ADD_KEYS})"), true, None::<&str>)?)?;
+            menu.append(&MenuItem::with_id(app, "bulk", "Bulk add…", true, None::<&str>)?)?;
         }
         menu.append(&PredefinedMenuItem::separator(app)?)?;
         menu.append(&MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?)?;
@@ -139,6 +152,12 @@ fn rebuild_tray(app: &AppHandle) {
         };
         let _ = tray.set_tooltip(Some(tip));
     }
+}
+
+/// Show the window on the add-task or bulk-add panel.
+fn compose(app: &AppHandle, mode: &str) {
+    show_window(app);
+    let _ = app.emit("flowly://compose", mode.to_string());
 }
 
 fn show_window(app: &AppHandle) {
@@ -170,7 +189,21 @@ fn get_state(state: State<AppState>) -> Value {
         "timer": snap.timer,
         "tasks": snap.tasks,
         "workspaces": snap.workspaces,
+        "all_workspaces": snap.all_workspaces,
+        "shortcut": QUICK_ADD_KEYS,
     })
+}
+
+/// Add one task or a whole list (bulk-add format) to a workspace; returns the created tasks.
+#[tauri::command]
+async fn add_tasks(app: AppHandle, text: String, workspace: Option<i64>, day: Option<String>) -> Result<Value, String> {
+    let client = app.state::<AppState>().client.clone();
+    let res = client
+        .post("/api/my/tasks/quick/", json!({"text": text, "workspace": workspace, "day": day.unwrap_or_else(|| "today".into())}))
+        .await
+        .map_err(err)?;
+    refresh(&app).await;
+    Ok(res)
 }
 
 #[tauri::command]
@@ -223,7 +256,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show_window(app)))
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_state, sign_in, sign_out, start, stop, reload, open_flowly])
+        .invoke_handler(tauri::generate_handler![get_state, sign_in, sign_out, start, stop, reload, open_flowly, add_tasks])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -243,6 +276,8 @@ pub fn run() {
                     match id.as_str() {
                         "quit" => app.exit(0),
                         "show" => show_window(&app),
+                        "add" => compose(&app, "add"),
+                        "bulk" => compose(&app, "bulk"),
                         "open" => {
                             let _ = app.opener().open_url(format!("{}/day", api::DEFAULT_APP), None::<&str>);
                         }
@@ -283,6 +318,27 @@ pub fn run() {
                 })
                 .build(app)?;
             *app.state::<AppState>().tray.lock().unwrap() = Some(tray);
+
+            // Quick add from anywhere.
+            {
+                use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+                #[cfg(target_os = "macos")]
+                let mods = Modifiers::SUPER | Modifiers::ALT;
+                #[cfg(not(target_os = "macos"))]
+                let mods = Modifiers::CONTROL | Modifiers::ALT;
+                let quick = Shortcut::new(Some(mods), Code::KeyN);
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_handler(move |app, shortcut, event| {
+                            if shortcut == &quick && event.state() == ShortcutState::Pressed {
+                                compose(app, "add");
+                            }
+                        })
+                        .build(),
+                )?;
+                // Another app may own the shortcut: the menu item still works.
+                let _ = app.global_shortcut().register(quick);
+            }
 
             // Poll the API every minute; refresh the tray clock every 20 s.
             let handle = app.handle().clone();

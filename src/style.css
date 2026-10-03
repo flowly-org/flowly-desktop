@@ -35,3 +35,19 @@ li .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 footer { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
 .error { position: fixed; left: 14px; right: 14px; bottom: 14px; margin: 0; padding: 8px 12px; border-radius: 8px; background: var(--danger); color: #fff; }
 [hidden] { display: none !important; }
+.compose { margin-bottom: 12px; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.compose form { display: grid; gap: 8px; }
+.compose input, .compose textarea { width: 100%; min-width: 0; max-width: 100%; }
+.compose form > * { min-width: 0; }
+.compose button { white-space: nowrap; }
+textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px; resize: vertical; user-select: text; }
+.compose input { user-select: text; }
+.compose .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.compose select { flex: 1 1 40%; min-width: 0; }
+.compose .row .spacer { flex: 1 0 auto; }
+.hint { margin: 0; }
+.hint code { font-size: 0.75rem; background: var(--bg); border-radius: 4px; padding: 0 4px; }
+button.small { padding: 4px 8px; font-size: 0.82rem; }
+header button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.added { margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 15%, var(--surface)); color: var(--ok); font-weight: 600; }
+.compose .row [data-close] { margin-left: auto; }
