@@ -75,8 +75,39 @@ async function addTasks(text, ws, day) {
   return res;
 }
 
+const ADD = '__add';
+
+function fillServers() {
+  const select = $('server');
+  select.innerHTML = '';
+  for (const s of state.servers || []) {
+    const o = document.createElement('option');
+    o.value = s.id;
+    o.textContent = s.name;
+    o.title = s.email ? `${s.app_url} · ${s.email}` : s.app_url;
+    select.appendChild(o);
+  }
+  const add = document.createElement('option');
+  add.value = ADD;
+  add.textContent = 'Add server…';
+  select.appendChild(add);
+  select.value = state.server;
+  $('server-name').textContent = state.server_name || 'flowly.net';
+}
+
+function showAddServer(show) {
+  $('add-server').hidden = !show;
+  if (show) {
+    setComposing(null);
+    setTimeout(() => $('server-url').focus(), 30);
+  } else if (state) {
+    $('server').value = state.server;
+  }
+}
+
 function render() {
   if (!state) return;
+  fillServers();
   $('signed-out').hidden = state.signed_in;
   $('signed-in').hidden = !state.signed_in;
   $('btn-add').hidden = $('btn-bulk').hidden = !state.signed_in;
@@ -164,6 +195,30 @@ $('quick').onsubmit = async (e) => {
   $('desc').value = '';
 };
 
+$('server').onchange = async () => {
+  const id = $('server').value;
+  if (id === ADD) return showAddServer(true);
+  showAddServer(false);
+  await call('use_server', { id });
+};
+$('server-cancel').onclick = () => showAddServer(false);
+$('server-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const url = $('server-url').value.trim();
+  if (!url) return;
+  $('server-submit').disabled = true;
+  $('server-submit').textContent = 'Checking…';
+  try {
+    const added = await call('add_server', { url });
+    $('server-url').value = '';
+    showAddServer(false);
+    flash(`Connected to ${added.name}. Sign in to start.`);
+  } finally {
+    $('server-submit').disabled = false;
+    $('server-submit').textContent = 'Add';
+  }
+};
+
 $('btn-add').onclick = () => setComposing(composing === 'add' ? null : 'add');
 $('btn-bulk').onclick = () => setComposing(composing === 'bulk' ? null : 'bulk');
 document.querySelectorAll('[data-close]').forEach((b) => (b.onclick = () => setComposing(null)));
@@ -194,9 +249,11 @@ $('bulk-form').onsubmit = async (e) => {
 };
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && composing) setComposing(null);
+  if (e.key === 'Escape' && !$('add-server').hidden) showAddServer(false);
 });
 
 listen('flowly://compose', (e) => setComposing(String(e.payload)));
+listen('flowly://add-server', () => showAddServer(true));
 listen('flowly://state', load);
 listen('flowly://error', (e) => showError(String(e.payload)));
 window.addEventListener('focus', () => invoke('reload'));

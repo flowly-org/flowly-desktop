@@ -10,15 +10,29 @@
   <header>
     <svg viewBox="0 0 64 64" width="22" height="22" aria-hidden="true"><rect x="20" y="4" width="13" height="56" rx="6.5" fill="currentColor"/><rect x="20" y="4" width="40" height="13" rx="6.5" fill="currentColor" fill-opacity=".42"/><rect x="20" y="21" width="32" height="13" rx="6.5" fill="currentColor" fill-opacity=".58"/><rect x="20" y="38" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".74"/><rect x="4" y="21" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".86"/><rect x="4" y="38" width="24" height="13" rx="6.5" fill="currentColor" fill-opacity=".94"/></svg>
     <strong>Flowly</strong>
+    <select id="server" class="server" aria-label="Server" title="Flowly server"></select>
     <span class="spacer"></span>
     <button id="btn-add" class="ghost small" type="button" hidden>+ Task</button>
     <button id="btn-bulk" class="ghost small" type="button" title="Paste a list of tasks" hidden>≡ Bulk</button>
     <button id="open" class="ghost" type="button" title="Open Flowly in the browser">↗</button>
   </header>
 
+  <section id="add-server" class="compose" hidden>
+    <form id="server-form">
+      <strong>Add a Flowly server</strong>
+      <input id="server-url" placeholder="flowly.example.com" aria-label="Server address" autocomplete="off" spellcheck="false">
+      <p class="muted small hint">The address of its web app or its API. Self-hosted servers need https.</p>
+      <div class="row">
+        <span class="spacer"></span>
+        <button type="button" class="ghost small" id="server-cancel">Cancel</button>
+        <button id="server-submit" class="primary" type="submit">Add</button>
+      </div>
+    </form>
+  </section>
+
   <section id="signed-out" hidden>
     <h1>Track time from your tray</h1>
-    <p class="muted">Sign in with your Flowly account. Your browser opens to confirm.</p>
+    <p class="muted">Sign in with your account on <strong id="server-name">flowly.net</strong>. Your browser opens to confirm.</p>
     <button id="signin" class="primary" type="button">Sign in</button>
     <p id="signin-wait" class="muted small" hidden>Waiting for the browser… finish signing in there.</p>
   </section>

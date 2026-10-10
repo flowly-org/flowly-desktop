@@ -52,8 +52,8 @@ jobs:
           args: ${{ matrix.args }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Flowly Desktop {0}', github.ref_name) || '' }}
-          releaseBody: "Unsigned test builds. macOS: right-click → Open the first time. Windows: More info → Run anyway."
-          releaseDraft: true
+          releaseBody: "Unsigned builds. macOS: right-click → Open the first time. Windows: More info → Run anyway."
+          releaseDraft: false
 
       - name: Upload installers
         uses: actions/upload-artifact@v4

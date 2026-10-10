@@ -51,3 +51,6 @@ button.small { padding: 4px 8px; font-size: 0.82rem; }
 header button.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 .added { margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 15%, var(--surface)); color: var(--ok); font-weight: 600; }
 .compose .row [data-close] { margin-left: auto; }
+select.server { padding: 3px 6px; font-size: 0.8rem; max-width: 150px; border-color: transparent; background: transparent; color: var(--muted); }
+select.server:hover, select.server:focus { border-color: var(--line); background: var(--surface); }
+#add-server input { user-select: text; }

@@ -6,7 +6,7 @@ use api::{ApiError, Client};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
@@ -54,6 +54,7 @@ fn title_of(entry: &Value) -> String {
 async fn refresh(app: &AppHandle) {
     let state = app.state::<AppState>();
     let client = state.client.clone();
+    let server = client.active_id();
     if !client.signed_in() {
         *state.snapshot.lock().unwrap() = Snapshot::default();
         rebuild_tray(app);
@@ -64,6 +65,9 @@ async fn refresh(app: &AppHandle) {
     let timer = client.get("/api/my/timer/").await;
     let tasks = client.get(&format!("/api/my/tasks/?day={today}&include_overdue=true&assignee=me")).await;
     let ctx = client.get("/api/my/context/").await;
+    if client.active_id() != server {
+        return; // switched servers meanwhile: that refresh has it covered
+    }
     if matches!(timer, Err(ApiError::SignedOut)) {
         client.sign_out();
     }
@@ -106,10 +110,12 @@ fn rebuild_tray(app: &AppHandle) {
     let state = app.state::<AppState>();
     let snap = state.snapshot.lock().unwrap().clone();
     let signed_in = state.client.signed_in();
+    let name = state.client.active_name();
+    let servers = state.client.servers();
     let build = || -> tauri::Result<Menu<tauri::Wry>> {
         let menu = Menu::new(app)?;
         if !signed_in {
-            menu.append(&MenuItem::with_id(app, "signin", "Sign in to Flowly…", true, None::<&str>)?)?;
+            menu.append(&MenuItem::with_id(app, "signin", format!("Sign in to {name}…"), true, None::<&str>)?)?;
         } else {
             match &snap.timer {
                 Some(t) => {
@@ -132,8 +138,24 @@ fn rebuild_tray(app: &AppHandle) {
         menu.append(&PredefinedMenuItem::separator(app)?)?;
         menu.append(&MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?)?;
         menu.append(&MenuItem::with_id(app, "open", "Open Flowly", true, None::<&str>)?)?;
+        let list = Submenu::with_id(app, "servers", format!("Server: {name}"), true)?;
+        for s in &servers {
+            let id = format!("server:{}", s["id"].as_str().unwrap_or_default());
+            let label = match s["email"].as_str() {
+                Some(email) => format!("{} ({email})", s["name"].as_str().unwrap_or_default()),
+                None => s["name"].as_str().unwrap_or_default().to_string(),
+            };
+            let active = s["active"].as_bool().unwrap_or(false);
+            list.append(&CheckMenuItem::with_id(app, id, label, true, active, None::<&str>)?)?;
+        }
+        list.append(&PredefinedMenuItem::separator(app)?)?;
+        list.append(&MenuItem::with_id(app, "addserver", "Add server…", true, None::<&str>)?)?;
+        if servers.len() > 1 {
+            list.append(&MenuItem::with_id(app, "removeserver", format!("Remove {name}"), true, None::<&str>)?)?;
+        }
+        menu.append(&list)?;
         if signed_in {
-            menu.append(&MenuItem::with_id(app, "signout", "Sign out", true, None::<&str>)?)?;
+            menu.append(&MenuItem::with_id(app, "signout", format!("Sign out of {name}"), true, None::<&str>)?)?;
         }
         menu.append(&MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?)?;
         Ok(menu)
@@ -186,6 +208,9 @@ fn get_state(state: State<AppState>) -> Value {
     json!({
         "signed_in": state.client.signed_in(),
         "email": state.client.email(),
+        "server": state.client.active_id(),
+        "server_name": state.client.active_name(),
+        "servers": state.client.servers(),
         "timer": snap.timer,
         "tasks": snap.tasks,
         "workspaces": snap.workspaces,
@@ -204,6 +229,37 @@ async fn add_tasks(app: AppHandle, text: String, workspace: Option<i64>, day: Op
         .map_err(err)?;
     refresh(&app).await;
     Ok(res)
+}
+
+/// Make another server active: today's tasks and the timer follow it.
+#[tauri::command]
+async fn use_server(app: AppHandle, id: String) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    if !state.client.set_active(&id) {
+        return Err("Unknown server".into());
+    }
+    *state.snapshot.lock().unwrap() = Snapshot::default();
+    refresh(&app).await;
+    Ok(())
+}
+
+/// Add a server from its web app or API address (and switch to it).
+#[tauri::command]
+async fn add_server(app: AppHandle, url: String) -> Result<Value, String> {
+    let client = app.state::<AppState>().client.clone();
+    let added = client.add_server(&url).await.map_err(err)?;
+    *app.state::<AppState>().snapshot.lock().unwrap() = Snapshot::default();
+    refresh(&app).await;
+    Ok(added)
+}
+
+#[tauri::command]
+async fn remove_server(app: AppHandle, id: String) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    state.client.remove_server(&id);
+    *state.snapshot.lock().unwrap() = Snapshot::default();
+    refresh(&app).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -249,14 +305,17 @@ async fn reload(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn open_flowly(app: AppHandle, path: Option<String>) {
-    let _ = app.opener().open_url(format!("{}{}", api::DEFAULT_APP, path.unwrap_or_else(|| "/day".into())), None::<&str>);
+    let base = app.state::<AppState>().client.app_url();
+    let _ = app.opener().open_url(format!("{base}{}", path.unwrap_or_else(|| "/day".into())), None::<&str>);
 }
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show_window(app)))
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_state, sign_in, sign_out, start, stop, reload, open_flowly, add_tasks])
+        .invoke_handler(tauri::generate_handler![
+            get_state, sign_in, sign_out, start, stop, reload, open_flowly, add_tasks, use_server, add_server, remove_server
+        ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -278,8 +337,22 @@ pub fn run() {
                         "show" => show_window(&app),
                         "add" => compose(&app, "add"),
                         "bulk" => compose(&app, "bulk"),
-                        "open" => {
-                            let _ = app.opener().open_url(format!("{}/day", api::DEFAULT_APP), None::<&str>);
+                        "open" => open_flowly(app, None),
+                        "addserver" => {
+                            show_window(&app);
+                            let _ = app.emit("flowly://add-server", ());
+                        }
+                        "removeserver" => {
+                            tauri::async_runtime::spawn(async move {
+                                let id = app.state::<AppState>().client.active_id();
+                                let _ = remove_server(app, id).await;
+                            });
+                        }
+                        other if other.starts_with("server:") => {
+                            let id = other.trim_start_matches("server:").to_string();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = use_server(app, id).await;
+                            });
                         }
                         "signin" => {
                             tauri::async_runtime::spawn(async move {
